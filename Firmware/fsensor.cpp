@@ -368,34 +368,36 @@ ISR(FSENSOR_INT_PIN_VECT)
 	static bool _lock = false;
 	if (_lock) return;
 	_lock = true;
-	int st_cnt = fsensor_st_cnt;
-	fsensor_st_cnt = 0;
+	int st_cnt = fsensor_st_cnt; // assign new variable the step count value
+	fsensor_st_cnt = 0; // variable for accumulating step count (updated callbacks from stepper and ISR)
 	sei();
-	uint8_t old_err_cnt = fsensor_err_cnt;
+	uint8_t old_err_cnt = fsensor_err_cnt; // this value is incramented. If it gets too high an error is triggered
 	uint8_t pat9125_res = fsensor_oq_meassure?pat9125_update():pat9125_update_y();
-	if (!pat9125_res)
+	// In Python: pat9125_res = pat9125_update() if (fsensor_oq_meassure = True) else pat9125_update_y()
+
+	if (!pat9125_res) // if res is too low, or sensor is not responding, or whatever, it just catches errors dont shoot me
 	{
 		fsensor_disable();
 		fsensor_not_responding = true;
 		printf_P(ERRMSG_PAT9125_NOT_RESP, 1);
 	}
-	if (st_cnt != 0)
+	if (st_cnt != 0) // if the filament has hoved
 	{ //movement
-		if (st_cnt > 0) //positive movement
+		if (st_cnt > 0) // if the movement is positive
 		{
-			if (pat9125_y < 0)
+			if (pat9125_y < 0) // if the sensor senses negative movement
 			{
-				if (fsensor_err_cnt)
-					fsensor_err_cnt += 2;
-				else
-					fsensor_err_cnt++;
+				if (fsensor_err_cnt) // if the error count is non zero (re: first error of the "session")
+					fsensor_err_cnt += 2; // incrament by 2
+				else 
+					fsensor_err_cnt++; // otherwise, incrament by 1
 			}
-			else if (pat9125_y > 0)
+			else if (pat9125_y > 0) // else if movement is positive
 			{
-				if (fsensor_err_cnt)
+				if (fsensor_err_cnt) // if error count is non zero, decrement it
 					fsensor_err_cnt--;
 			}
-			else //(pat9125_y == 0)
+			else // basically if (pat9125_y == 0) 
 				if (((fsensor_dy_old <= 0) || (fsensor_err_cnt)) && (st_cnt > (fsensor_chunk_len >> 1)))
 					fsensor_err_cnt++;
 			if (fsensor_oq_meassure)
